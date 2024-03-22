@@ -1,0 +1,5 @@
+module Command
+
+provide let _start = () => {
+  print("Hello, world!")
+}

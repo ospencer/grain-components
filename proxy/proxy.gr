@@ -1,0 +1,32 @@
+module Proxy
+
+from "result" include Result
+
+from "./imports.gr" include Proxy
+use Proxy.{
+  type IncomingRequest,
+  type ResponseOutparam,
+  module Types,
+  module Streams,
+}
+
+// Export functions from wasi:http/incoming-handler@0.2.0
+
+provide module IncomingHandlerExports {
+  provide let handle = (request: IncomingRequest, responseOut: ResponseOutparam) => {
+    use Types.{
+      module OutgoingResponse,
+      module OutgoingBody,
+      module Fields,
+      module ResponseOutparam,
+    }
+    use Streams.{ module InputStream, module OutputStream }
+
+    let fields = Fields.constructor()
+    let outgoingResponse = OutgoingResponse.constructor(fields)
+    let body = Result.unwrap(OutgoingResponse.body(outgoingResponse))
+    let stream = Result.unwrap(OutgoingBody.write(body))
+    OutputStream.blockingWriteAndFlush(stream, b"Hello, world!")
+    ResponseOutparam.set(responseOut, Ok(outgoingResponse))
+  }
+}

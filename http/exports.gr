@@ -1,0 +1,26 @@
+module Exports
+
+from "runtime/unsafe/wasmi32" include WasmI32
+from "runtime/unsafe/memory" include Memory
+
+from "./http.gr" include Http
+
+@unsafe
+provide let cabi_realloc = (
+  originalPtr: WasmI32,
+  originalSize: WasmI32,
+  alignment: WasmI32,
+  newSize: WasmI32,
+) => {
+  if (WasmI32.eqz(originalPtr)) {
+    Memory.malloc(newSize)
+  } else {
+    let newPtr = Memory.malloc(newSize)
+    let amt = if (WasmI32.(<)(originalSize, newSize)) originalSize else newSize
+    Memory.copy(newPtr, originalPtr, amt)
+    Memory.free(originalPtr)
+    newPtr
+  }
+}
+
+provide let _start = () => Http.main()

@@ -1,0 +1,76 @@
+module Http
+
+from "buffer" include Buffer
+from "bytes" include Bytes
+from "option" include Option
+from "result" include Result
+
+from "./imports.gr" include Imports
+use Imports.{
+  module Types,
+  module Poll,
+  module Streams,
+  module OutgoingHandler,
+}
+use Types.{
+  module IncomingResponse,
+  module IncomingBody,
+  module OutgoingRequest,
+  module OutgoingResponse,
+  module OutgoingBody,
+  module Fields,
+  module FutureIncomingResponse,
+}
+use Streams.{ module InputStream }
+
+let readStream = stream => {
+  let buffer = Buffer.make(4096)
+  while (true) {
+    match (InputStream.blockingRead(stream, 4096uL)) {
+      Ok(bytes) => Buffer.addBytes(bytes, buffer),
+      Err(Closed) => return Ok(Buffer.toBytes(buffer)),
+      Err(LastOperationFailed(_) as e) => return Err(e),
+    }
+  }
+  return Ok(Bytes.empty)
+}
+
+provide let main = () => {
+  // Construct the request
+  let fields = Fields.constructor()
+  let outgoingRequest = OutgoingRequest.constructor(fields)
+  OutgoingRequest.setMethod(outgoingRequest, Get)
+  OutgoingRequest.setScheme(outgoingRequest, Some(Https))
+  OutgoingRequest.setAuthority(outgoingRequest, Some("pokeapi.co"))
+  OutgoingRequest.setPathWithQuery(
+    outgoingRequest,
+    Some("/api/v2/pokemon/ditto")
+  )
+
+  // Make the request
+  let request = OutgoingHandler.handle(outgoingRequest, None)
+
+  // Read the response
+  let response = Result.unwrap(request)
+  let pollable = FutureIncomingResponse.subscribe(response)
+  Poll.Pollable.block(pollable)
+  let response = Option.unwrap(FutureIncomingResponse.get(response))
+  let response = match (response) {
+    Ok(Ok(response)) => {
+      let body = Result.unwrap(IncomingResponse.consume(response))
+      let stream = Result.unwrap(IncomingBody.stream(body))
+      let bytes = Result.unwrap(readStream(stream))
+      Bytes.toString(bytes)
+    },
+    _ => {
+      print("Request failed :(")
+      return
+    },
+  }
+
+  print(response)
+
+  // Maybe parse some JSON, go wild...
+
+  return
+}
